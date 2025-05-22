@@ -405,8 +405,8 @@ class ControlWindow(QtWidgets.QWidget):
         shot_layout.addWidget(self.undo_btn)
         shot_layout.addWidget(self.reset_btn)
 
-        # --- Ship Placement Controls ---
-        ship_layout = QtWidgets.QHBoxLayout()
+        # --- New Row: Ship Placement/Randomize Controls ---
+        ship_row_layout = QtWidgets.QHBoxLayout()
         self.ship_select = QtWidgets.QComboBox()
         for name, _ in SHIP_SHAPES:
             self.ship_select.addItem(name)
@@ -419,7 +419,6 @@ class ControlWindow(QtWidgets.QWidget):
         self.place_btn.clicked.connect(self.place_ship_text)
         self.ship_entry = QtWidgets.QLineEdit()
         self.ship_entry.setPlaceholderText("Set ship origin: A1")
-        # --- Randomize Buttons ---
         self.randomize_all_btn = QtWidgets.QPushButton("Randomize All Ships (Both)")
         self.randomize_all_btn.clicked.connect(self.randomize_all_ships)
         self.randomize_alpha_btn = QtWidgets.QPushButton("Randomize Alpha")
@@ -428,15 +427,15 @@ class ControlWindow(QtWidgets.QWidget):
         self.randomize_omega_btn.clicked.connect(lambda: self.randomize_team("Omega"))
         self.randomize_selected_btn = QtWidgets.QPushButton("Randomize Selected Ship")
         self.randomize_selected_btn.clicked.connect(self.randomize_selected_ship)
-        ship_layout.addWidget(self.ship_select)
-        ship_layout.addWidget(self.rotate_btn)
-        ship_layout.addWidget(self.ship_team)
-        ship_layout.addWidget(self.place_btn)
-        ship_layout.addWidget(self.ship_entry)
-        ship_layout.addWidget(self.randomize_all_btn)
-        ship_layout.addWidget(self.randomize_alpha_btn)
-        ship_layout.addWidget(self.randomize_omega_btn)
-        ship_layout.addWidget(self.randomize_selected_btn)
+        ship_row_layout.addWidget(self.ship_select)
+        ship_row_layout.addWidget(self.rotate_btn)
+        ship_row_layout.addWidget(self.ship_team)
+        ship_row_layout.addWidget(self.place_btn)
+        ship_row_layout.addWidget(self.ship_entry)
+        ship_row_layout.addWidget(self.randomize_all_btn)
+        ship_row_layout.addWidget(self.randomize_alpha_btn)
+        ship_row_layout.addWidget(self.randomize_omega_btn)
+        ship_row_layout.addWidget(self.randomize_selected_btn)
 
         # --- Game/Stats Controls ---
         game_layout = QtWidgets.QHBoxLayout()
@@ -465,13 +464,13 @@ class ControlWindow(QtWidgets.QWidget):
         # --- Log ---
         self.log_box = QtWidgets.QTextEdit()
         self.log_box.setReadOnly(True)
-        self.log_box.setMinimumHeight(200)
+        self.log_box.setMinimumHeight(100)
         self.log_box.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         # Make log scrollable if needed
         log_scroll = QtWidgets.QScrollArea()
         log_scroll.setWidgetResizable(True)
         log_scroll.setWidget(self.log_box)
-        log_scroll.setMinimumHeight(200)
+        log_scroll.setMinimumHeight(100)
         log_scroll.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
 
         # --- Ship Grids ---
@@ -490,7 +489,7 @@ class ControlWindow(QtWidgets.QWidget):
         # --- Left Layout: controls and log ---
         left_layout = QtWidgets.QVBoxLayout()
         left_layout.addLayout(shot_layout)
-        left_layout.addLayout(ship_layout)
+        left_layout.addLayout(ship_row_layout)
         left_layout.addLayout(game_layout)
         left_layout.addWidget(log_scroll, stretch=1)
         # Add status bar
