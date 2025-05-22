@@ -357,6 +357,12 @@ class ControlWindow(QtWidgets.QWidget):
         self.selected_ship_idx = 0
         self.orientation = 0  # 0: horizontal
         self.initUI()
+        # Set a reasonable default size and make resizable
+        self.resize(1200, 800)
+        self.setMinimumSize(800, 600)
+        # Ensure window never exceeds screen size
+        screen = QtWidgets.QApplication.primaryScreen().availableGeometry()
+        self.setMaximumSize(screen.width(), screen.height())
 
     def initUI(self):
         # --- Top: Shot Controls ---
@@ -447,28 +453,42 @@ class ControlWindow(QtWidgets.QWidget):
         self.log_box = QtWidgets.QTextEdit()
         self.log_box.setReadOnly(True)
         self.log_box.setMinimumHeight(200)
+        self.log_box.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        # Make log scrollable if needed
+        log_scroll = QtWidgets.QScrollArea()
+        log_scroll.setWidgetResizable(True)
+        log_scroll.setWidget(self.log_box)
+        log_scroll.setMinimumHeight(200)
+        log_scroll.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
 
         # --- Ship Grids ---
         self.alpha_label = QtWidgets.QLabel("Alpha Ship Grid")
         self.alpha_grid = ShipPlacementGrid(self.game_state, "Alpha", self.update_grids, self.get_selected_ship, self.get_orientation)
         self.omega_label = QtWidgets.QLabel("Omega Ship Grid")
         self.omega_grid = ShipPlacementGrid(self.game_state, "Omega", self.update_grids, self.get_selected_ship, self.get_orientation)
+        # Make grids scrollable if needed
+        alpha_grid_scroll = QtWidgets.QScrollArea()
+        alpha_grid_scroll.setWidgetResizable(True)
+        alpha_grid_scroll.setWidget(self.alpha_grid)
+        omega_grid_scroll = QtWidgets.QScrollArea()
+        omega_grid_scroll.setWidgetResizable(True)
+        omega_grid_scroll.setWidget(self.omega_grid)
 
         # --- Left Layout: controls and log ---
         left_layout = QtWidgets.QVBoxLayout()
         left_layout.addLayout(shot_layout)
         left_layout.addLayout(ship_layout)
         left_layout.addLayout(game_layout)
-        left_layout.addWidget(self.log_box, stretch=1)
+        left_layout.addWidget(log_scroll, stretch=1)
 
         # --- Right Layout: ship grids stacked vertically ---
         right_layout = QtWidgets.QVBoxLayout()
         right_layout.addWidget(self.alpha_label)
-        right_layout.addWidget(self.alpha_grid)
+        right_layout.addWidget(alpha_grid_scroll, stretch=1)
         right_layout.addWidget(self.omega_label)
-        right_layout.addWidget(self.omega_grid)
-        right_layout.setStretchFactor(self.alpha_grid, 1)
-        right_layout.setStretchFactor(self.omega_grid, 1)
+        right_layout.addWidget(omega_grid_scroll, stretch=1)
+        right_layout.setStretchFactor(alpha_grid_scroll, 1)
+        right_layout.setStretchFactor(omega_grid_scroll, 1)
 
         # --- Main Layout: side by side ---
         main_layout = QtWidgets.QHBoxLayout(self)
