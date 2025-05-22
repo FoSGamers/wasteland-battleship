@@ -197,9 +197,10 @@ class DisplayWindow(QtWidgets.QWidget):
         for x in range(GRID_SIZE):
             rect = QtCore.QRectF(40 + x * cell_size, offset_y_alpha - 24, cell_size, 20)
             painter.drawText(rect, QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter, string.ascii_uppercase[x])
-        # Draw row numbers
+        # Draw row numbers (fixed)
         for y in range(GRID_SIZE):
-            painter.drawText(18, offset_y_alpha + y * cell_size + cell_size / 2 + 6, str(y + 1))
+            rect = QtCore.QRectF(0, offset_y_alpha + y * cell_size, 38, cell_size)
+            painter.drawText(rect, QtCore.Qt.AlignVCenter | QtCore.Qt.AlignRight, str(y + 1))
         for x in range(GRID_SIZE):
             for y in range(GRID_SIZE):
                 color = self.game_state.grid_alpha[(x, y)]
@@ -225,7 +226,8 @@ class DisplayWindow(QtWidgets.QWidget):
             rect = QtCore.QRectF(40 + x * cell_size, offset_y_omega - 24, cell_size, 20)
             painter.drawText(rect, QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter, string.ascii_uppercase[x])
         for y in range(GRID_SIZE):
-            painter.drawText(18, offset_y_omega + y * cell_size + cell_size / 2 + 6, str(y + 1))
+            rect = QtCore.QRectF(0, offset_y_omega + y * cell_size, 38, cell_size)
+            painter.drawText(rect, QtCore.Qt.AlignVCenter | QtCore.Qt.AlignRight, str(y + 1))
         for x in range(GRID_SIZE):
             for y in range(GRID_SIZE):
                 color = self.game_state.grid_omega[(x, y)]
