@@ -383,7 +383,10 @@ class ControlWindow(QtWidgets.QWidget):
         self.setMaximumSize(screen.width(), screen.height())
 
     def initUI(self):
-        # --- Menu bar (define first so it's available for layout) ---
+        # --- Status bar (define first so it's available for layout) ---
+        self.status_bar = QtWidgets.QStatusBar()
+        self.status_bar.showMessage("Ready")
+        # --- Menu bar (define next so it's available for layout) ---
         menu_bar = QtWidgets.QMenuBar()
         game_menu = menu_bar.addMenu("Game")
         new_action = QtWidgets.QAction("New Game", self)
