@@ -523,12 +523,16 @@ class ControlWindow(QtWidgets.QWidget):
         left_panel_layout.addWidget(left_splitter)
         left_panel_layout.addWidget(self.status_bar)
         left_panel.setLayout(left_panel_layout)
+        left_panel.setMinimumWidth(280)
 
         # --- Right Layout: ship grids stacked vertically ---
         self.alpha_label = QtWidgets.QLabel("Alpha Ship Grid")
-        self.alpha_grid = ShipPlacementGrid(self.game_state, "Alpha", self.update_grids, self.get_selected_ship, self.get_orientation, self, hide_ships=False)
         self.omega_label = QtWidgets.QLabel("Omega Ship Grid")
+        # Set up grids with hide_ships logic and minimum size
+        self.alpha_grid = ShipPlacementGrid(self.game_state, "Alpha", self.update_grids, self.get_selected_ship, self.get_orientation, self, hide_ships=False)
         self.omega_grid = ShipPlacementGrid(self.game_state, "Omega", self.update_grids, self.get_selected_ship, self.get_orientation, self, hide_ships=False)
+        self.alpha_grid.setMinimumSize(300, 300)
+        self.omega_grid.setMinimumSize(300, 300)
         right_layout = QtWidgets.QVBoxLayout()
         right_layout.addWidget(self.alpha_label)
         right_layout.addWidget(self.alpha_grid, stretch=1)
@@ -538,13 +542,17 @@ class ControlWindow(QtWidgets.QWidget):
         right_layout.setStretchFactor(self.omega_grid, 1)
         right_panel = QtWidgets.QWidget()
         right_panel.setLayout(right_layout)
+        right_panel.setMinimumWidth(340)  # 300 grid + padding/labels
 
         # --- Main Layout: QSplitter for left/right ---
         splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
         splitter.addWidget(left_panel)
         splitter.addWidget(right_panel)
-        splitter.setSizes([400, 800])
-        splitter.setHandleWidth(8)
+        splitter.setSizes([max(320, int(self.width() * 0.28)), max(700, int(self.width() * 0.7))])
+        splitter.setHandleWidth(10)
+        # Prevent right panel from collapsing
+        splitter.setCollapsible(0, False)
+        splitter.setCollapsible(1, False)
         main_layout = QtWidgets.QVBoxLayout(self)
         main_layout.addWidget(splitter)
         self.setLayout(main_layout)
