@@ -52,16 +52,25 @@ class DisplayWindow(QtWidgets.QWidget):
         super().__init__()
         self.game_state = game_state
         self.setWindowTitle("Wasteland Battleship Display")
-        self.setFixedSize(GRID_SIZE * CELL_SIZE * 2 + 100, GRID_SIZE * CELL_SIZE + 60)
+        self.setMinimumSize(GRID_SIZE * CELL_SIZE * 2 + 100, GRID_SIZE * CELL_SIZE + 60)
         self.show()
 
     def paintEvent(self, event):
         painter = QtGui.QPainter(self)
-
+        font = painter.font()
+        font.setBold(True)
+        font.setPointSize(14)
+        painter.setFont(font)
+        # Draw grids
         for grid, color_base, offset_x in [
             (self.game_state.grid_alpha, ALPHA_COLOR, 20),
             (self.game_state.grid_omega, OMEGA_COLOR, GRID_SIZE * CELL_SIZE + 60),
         ]:
+            # Draw column letters centered
+            for x in range(GRID_SIZE):
+                rect = QtCore.QRect(offset_x + x * CELL_SIZE, 0, CELL_SIZE, 20)
+                painter.drawText(rect, QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter, string.ascii_uppercase[x])
+            # Draw grid cells
             for x in range(GRID_SIZE):
                 for y in range(GRID_SIZE):
                     color = grid[(x, y)]
@@ -77,29 +86,63 @@ class ControlWindow(QtWidgets.QWidget):
         self.game_state = game_state
         self.display_window = display_window
         self.setWindowTitle("Wasteland Battleship GM Control")
-        self.setFixedSize(400, 200)
+        self.setMinimumSize(400, 200)
+        self.initUI()
 
-        self.coord_input = QtWidgets.QLineEdit(self)
+    def initUI(self):
+        # Layouts
+        main_layout = QtWidgets.QVBoxLayout(self)
+        form_layout = QtWidgets.QHBoxLayout()
+        # Coordinate input
+        self.coord_input = QtWidgets.QLineEdit()
         self.coord_input.setPlaceholderText("Enter coordinate (e.g., B4)")
-        self.coord_input.setGeometry(20, 20, 150, 30)
-
-        self.team_selector = QtWidgets.QComboBox(self)
+        self.coord_input.setToolTip("Enter the grid coordinate to fire at, e.g., B4")
+        # Team selector
+        self.team_selector = QtWidgets.QComboBox()
         self.team_selector.addItems(["Alpha", "Omega"])
-        self.team_selector.setGeometry(200, 20, 100, 30)
-
-        self.fire_button = QtWidgets.QPushButton("FIRE!", self)
-        self.fire_button.setGeometry(150, 70, 100, 40)
+        self.team_selector.setToolTip("Select the team to fire for")
+        # Fire button
+        self.fire_button = QtWidgets.QPushButton("FIRE!")
+        self.fire_button.setToolTip("Fire at the selected coordinate")
         self.fire_button.clicked.connect(self.fire)
-
-        self.info_box = QtWidgets.QTextEdit(self)
+        # Info box
+        self.info_box = QtWidgets.QTextEdit()
         self.info_box.setReadOnly(True)
-        self.info_box.setGeometry(20, 120, 360, 60)
+        self.info_box.setMinimumHeight(60)
+        self.info_box.setToolTip("Displays shot results and messages")
+        # Add widgets to form layout
+        form_layout.addWidget(self.coord_input)
+        form_layout.addWidget(self.team_selector)
+        form_layout.addWidget(self.fire_button)
+        # Add to main layout
+        main_layout.addLayout(form_layout)
+        main_layout.addWidget(self.info_box)
+        # Status bar
+        self.status_bar = QtWidgets.QStatusBar()
+        self.status_bar.showMessage("Ready")
+        main_layout.addWidget(self.status_bar)
+        # Menu bar
+        menu_bar = QtWidgets.QMenuBar()
+        game_menu = menu_bar.addMenu("Game")
+        new_action = QtWidgets.QAction("New Game", self)
+        new_action.setShortcut("Ctrl+N")
+        new_action.triggered.connect(self.new_game)
+        exit_action = QtWidgets.QAction("Exit", self)
+        exit_action.setShortcut("Ctrl+Q")
+        exit_action.triggered.connect(QtWidgets.qApp.quit)
+        game_menu.addAction(new_action)
+        game_menu.addAction(exit_action)
+        help_menu = menu_bar.addMenu("Help")
+        about_action = QtWidgets.QAction("About", self)
+        about_action.triggered.connect(self.show_about)
+        help_menu.addAction(about_action)
+        main_layout.setMenuBar(menu_bar)
+        self.setLayout(main_layout)
         self.show()
 
     def fire(self):
         coord_text = self.coord_input.text().strip().upper()
         team = self.team_selector.currentText()
-
         try:
             col = string.ascii_uppercase.index(coord_text[0])
             row = int(coord_text[1:]) - 1
@@ -107,18 +150,27 @@ class ControlWindow(QtWidgets.QWidget):
                 raise ValueError
         except:
             self.info_box.setText("Invalid coordinate. Try A1 to H8.")
+            self.status_bar.showMessage("Invalid coordinate")
             return
-
         coord = (col, row)
         self.game_state.process_shot(team, coord)
         self.display_window.update()
-
         ship_hit = (
             coord in self.game_state.ships_omega if team == "Alpha"
             else coord in self.game_state.ships_alpha
         )
         result = "HIT!" if ship_hit else "MISS."
         self.info_box.setText(f"{team} fires at {coord_text} → {result}")
+        self.status_bar.showMessage(f"{team} fired at {coord_text}: {result}")
+
+    def new_game(self):
+        self.game_state.__init__()
+        self.display_window.update()
+        self.info_box.setText("New game started.")
+        self.status_bar.showMessage("New game started")
+
+    def show_about(self):
+        QtWidgets.QMessageBox.about(self, "About", "Wasteland Battleship\nModernized PyQt5 Edition\n\nUpgraded UI/UX and resizable windows.")
 
 
 if __name__ == "__main__":

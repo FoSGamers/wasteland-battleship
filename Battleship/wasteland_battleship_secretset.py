@@ -188,9 +188,10 @@ class DisplayWindow(QtWidgets.QWidget):
         painter.setFont(font)
         # Draw Alpha grid
         offset_y_alpha = 30
-        # Draw column letters
+        # Draw column letters centered
         for x in range(GRID_SIZE):
-            painter.drawText(40 + x * cell_size, offset_y_alpha - 8, string.ascii_uppercase[x])
+            rect = QtCore.QRect(40 + x * cell_size, offset_y_alpha - 24, cell_size, 20)
+            painter.drawText(rect, QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter, string.ascii_uppercase[x])
         # Draw row numbers
         for y in range(GRID_SIZE):
             painter.drawText(18, offset_y_alpha + y * cell_size + cell_size // 2 + 6, str(y + 1))
@@ -354,7 +355,7 @@ class ControlWindow(QtWidgets.QWidget):
         self.stats_panel = None
         self.leaderboard_panel = None
         self.selected_ship_idx = 0
-        self.orientation = 0  # 0: horizontal, 1: vertical/rotated
+        self.orientation = 0  # 0: horizontal
         self.initUI()
 
     def initUI(self):
@@ -362,15 +363,21 @@ class ControlWindow(QtWidgets.QWidget):
         shot_layout = QtWidgets.QHBoxLayout()
         self.name_input = QtWidgets.QLineEdit()
         self.name_input.setPlaceholderText("Player Name")
+        self.name_input.setToolTip("Enter the player's name")
         self.coord_input = QtWidgets.QLineEdit()
         self.coord_input.setPlaceholderText("Enter Coordinate (e.g., B4)")
+        self.coord_input.setToolTip("Enter the grid coordinate to fire at, e.g., B4")
         self.team_box = QtWidgets.QComboBox()
         self.team_box.addItems(["Alpha", "Omega"])
+        self.team_box.setToolTip("Select the team to fire for")
         self.fire_btn = QtWidgets.QPushButton("FIRE!")
+        self.fire_btn.setToolTip("Fire at the selected coordinate")
         self.fire_btn.clicked.connect(self.fire_shot)
         self.undo_btn = QtWidgets.QPushButton("Undo")
+        self.undo_btn.setToolTip("Undo the last shot")
         self.undo_btn.clicked.connect(self.undo_shot)
         self.reset_btn = QtWidgets.QPushButton("Reset Game")
+        self.reset_btn.setToolTip("Reset the game state")
         self.reset_btn.clicked.connect(self.reset_game)
         shot_layout.addWidget(self.name_input)
         shot_layout.addWidget(self.coord_input)
@@ -468,6 +475,26 @@ class ControlWindow(QtWidgets.QWidget):
         main_layout.addLayout(left_layout, stretch=2)
         main_layout.addLayout(right_layout, stretch=1)
         self.setLayout(main_layout)
+        # Add status bar
+        self.status_bar = QtWidgets.QStatusBar()
+        self.status_bar.showMessage("Ready")
+        left_layout.addWidget(self.status_bar)
+        # Add menu bar
+        menu_bar = QtWidgets.QMenuBar()
+        game_menu = menu_bar.addMenu("Game")
+        new_action = QtWidgets.QAction("New Game", self)
+        new_action.setShortcut("Ctrl+N")
+        new_action.triggered.connect(self.reset_game)
+        exit_action = QtWidgets.QAction("Exit", self)
+        exit_action.setShortcut("Ctrl+Q")
+        exit_action.triggered.connect(QtWidgets.qApp.quit)
+        game_menu.addAction(new_action)
+        game_menu.addAction(exit_action)
+        help_menu = menu_bar.addMenu("Help")
+        about_action = QtWidgets.QAction("About", self)
+        about_action.triggered.connect(self.show_about)
+        help_menu.addAction(about_action)
+        left_layout.setMenuBar(menu_bar)
         self.show()
 
     def set_ship_idx(self, idx):
@@ -640,6 +667,9 @@ class ControlWindow(QtWidgets.QWidget):
         self.game_state.randomize_ships(team, [idx])
         self.update_grids()
         self.log_box.append(f"Randomized {self.ship_select.currentText()} for {team}.")
+
+    def show_about(self):
+        QtWidgets.QMessageBox.about(self, "About", "Wasteland Battleship\nModernized PyQt5 Edition\n\nUpgraded UI/UX and resizable windows.")
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
