@@ -170,8 +170,13 @@ class DisplayWindow(QtWidgets.QWidget):
         super().__init__()
         self.setWindowTitle("Wasteland Grid Display")
         self.game_state = game_state
-        self.setMinimumSize(GRID_SIZE * CELL_SIZE + 60, GRID_SIZE * CELL_SIZE * 2 + 120)
+        # Remove setMinimumSize for full responsiveness
+        self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         self.show()
+
+    def resizeEvent(self, event):
+        self.update()
+        super().resizeEvent(event)
 
     def paintEvent(self, event):
         painter = QtGui.QPainter(self)
@@ -179,8 +184,8 @@ class DisplayWindow(QtWidgets.QWidget):
         height = self.height()
         grid_width = width - 60
         grid_height = (height - 120) // 2
-        cell_size_x = grid_width // GRID_SIZE
-        cell_size_y = grid_height // GRID_SIZE
+        cell_size_x = grid_width / GRID_SIZE
+        cell_size_y = grid_height / GRID_SIZE
         cell_size = min(cell_size_x, cell_size_y)
         font = painter.font()
         font.setBold(True)
@@ -190,16 +195,16 @@ class DisplayWindow(QtWidgets.QWidget):
         offset_y_alpha = 30
         # Draw column letters centered
         for x in range(GRID_SIZE):
-            rect = QtCore.QRect(40 + x * cell_size, offset_y_alpha - 24, cell_size, 20)
+            rect = QtCore.QRectF(40 + x * cell_size, offset_y_alpha - 24, cell_size, 20)
             painter.drawText(rect, QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter, string.ascii_uppercase[x])
         # Draw row numbers
         for y in range(GRID_SIZE):
-            painter.drawText(18, offset_y_alpha + y * cell_size + cell_size // 2 + 6, str(y + 1))
+            painter.drawText(18, offset_y_alpha + y * cell_size + cell_size / 2 + 6, str(y + 1))
         for x in range(GRID_SIZE):
             for y in range(GRID_SIZE):
                 color = self.game_state.grid_alpha[(x, y)]
                 display_color = ALPHA_COLOR if color == EMPTY_COLOR else color
-                rect = QtCore.QRect(40 + x * cell_size, offset_y_alpha + y * cell_size, cell_size, cell_size)
+                rect = QtCore.QRectF(40 + x * cell_size, offset_y_alpha + y * cell_size, cell_size, cell_size)
                 painter.fillRect(rect, QtGui.QColor(display_color))
                 painter.drawRect(rect)
         # Draw most recent log entry between grids
@@ -211,20 +216,21 @@ class DisplayWindow(QtWidgets.QWidget):
             painter.setFont(font)
             painter.setPen(QtGui.QColor("black"))
             y_log = offset_y_alpha + GRID_SIZE * cell_size + 24
-            painter.drawText(self.rect().adjusted(0, y_log, 0, 0), QtCore.Qt.AlignHCenter | QtCore.Qt.AlignTop, log_line)
+            painter.drawText(self.rect().adjusted(0, int(y_log), 0, 0), QtCore.Qt.AlignHCenter | QtCore.Qt.AlignTop, log_line)
         # Draw Omega grid
         offset_y_omega = grid_height + 70
         font.setPointSize(14)
         painter.setFont(font)
         for x in range(GRID_SIZE):
-            painter.drawText(40 + x * cell_size, offset_y_omega - 8, string.ascii_uppercase[x])
+            rect = QtCore.QRectF(40 + x * cell_size, offset_y_omega - 24, cell_size, 20)
+            painter.drawText(rect, QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter, string.ascii_uppercase[x])
         for y in range(GRID_SIZE):
-            painter.drawText(18, offset_y_omega + y * cell_size + cell_size // 2 + 6, str(y + 1))
+            painter.drawText(18, offset_y_omega + y * cell_size + cell_size / 2 + 6, str(y + 1))
         for x in range(GRID_SIZE):
             for y in range(GRID_SIZE):
                 color = self.game_state.grid_omega[(x, y)]
                 display_color = OMEGA_COLOR if color == EMPTY_COLOR else color
-                rect = QtCore.QRect(40 + x * cell_size, offset_y_omega + y * cell_size, cell_size, cell_size)
+                rect = QtCore.QRectF(40 + x * cell_size, offset_y_omega + y * cell_size, cell_size, cell_size)
                 painter.fillRect(rect, QtGui.QColor(display_color))
                 painter.drawRect(rect)
         # Show HIT or MISS text if last shot exists
@@ -250,21 +256,26 @@ class ShipPlacementGrid(QtWidgets.QWidget):
         self.update_callback = update_callback
         self.get_selected_ship = get_selected_ship
         self.get_orientation = get_orientation
-        self.setMinimumSize(GRID_SIZE * CELL_SIZE, GRID_SIZE * CELL_SIZE)
+        # Remove setMinimumSize for full responsiveness
+        self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         self.setToolTip(f"Drag-and-drop to place/remove ships for {team}")
+
+    def resizeEvent(self, event):
+        self.update()
+        super().resizeEvent(event)
 
     def paintEvent(self, event):
         painter = QtGui.QPainter(self)
         width = self.width()
         height = self.height()
-        cell_size_x = width // GRID_SIZE
-        cell_size_y = height // GRID_SIZE
+        cell_size_x = width / GRID_SIZE
+        cell_size_y = height / GRID_SIZE
         cell_size = min(cell_size_x, cell_size_y)
         color_base = ALPHA_COLOR if self.team == "Alpha" else OMEGA_COLOR
         ships = self.game_state.ships_alpha if self.team == "Alpha" else self.game_state.ships_omega
         for x in range(GRID_SIZE):
             for y in range(GRID_SIZE):
-                rect = QtCore.QRect(x * cell_size, y * cell_size, cell_size, cell_size)
+                rect = QtCore.QRectF(x * cell_size, y * cell_size, cell_size, cell_size)
                 painter.fillRect(rect, QtGui.QColor(color_base))
                 painter.drawRect(rect)
         for idx, (shape, origin, orientation) in enumerate(ships):
@@ -275,7 +286,7 @@ class ShipPlacementGrid(QtWidgets.QWidget):
                 else:
                     x, y = origin[0] + dy, origin[1] - dx
                 if 0 <= x < GRID_SIZE and 0 <= y < GRID_SIZE:
-                    rect = QtCore.QRect(x * cell_size, y * cell_size, cell_size, cell_size)
+                    rect = QtCore.QRectF(x * cell_size, y * cell_size, cell_size, cell_size)
                     painter.fillRect(rect, QtGui.QColor(color))
                     painter.drawRect(rect)
 
