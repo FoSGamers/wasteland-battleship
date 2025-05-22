@@ -251,7 +251,7 @@ class DisplayWindow(QtWidgets.QWidget):
         painter.setPen(QtGui.QColor("black"))
 
 class ShipPlacementGrid(QtWidgets.QWidget):
-    def __init__(self, game_state, team, update_callback, get_selected_ship, get_orientation, control_window=None):
+    def __init__(self, game_state, team, update_callback, get_selected_ship, get_orientation, control_window=None, hide_ships=True):
         super().__init__()
         self.game_state = game_state
         self.team = team
@@ -259,6 +259,7 @@ class ShipPlacementGrid(QtWidgets.QWidget):
         self.get_selected_ship = get_selected_ship
         self.get_orientation = get_orientation
         self.control_window = control_window
+        self.hide_ships = hide_ships
         self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         self.setToolTip(f"Drag-and-drop to place/remove ships for {team}")
 
@@ -525,9 +526,9 @@ class ControlWindow(QtWidgets.QWidget):
 
         # --- Right Layout: ship grids stacked vertically ---
         self.alpha_label = QtWidgets.QLabel("Alpha Ship Grid")
-        self.alpha_grid = ShipPlacementGrid(self.game_state, "Alpha", self.update_grids, self.get_selected_ship, self.get_orientation, self)
+        self.alpha_grid = ShipPlacementGrid(self.game_state, "Alpha", self.update_grids, self.get_selected_ship, self.get_orientation, self, hide_ships=False)
         self.omega_label = QtWidgets.QLabel("Omega Ship Grid")
-        self.omega_grid = ShipPlacementGrid(self.game_state, "Omega", self.update_grids, self.get_selected_ship, self.get_orientation, self)
+        self.omega_grid = ShipPlacementGrid(self.game_state, "Omega", self.update_grids, self.get_selected_ship, self.get_orientation, self, hide_ships=False)
         right_layout = QtWidgets.QVBoxLayout()
         right_layout.addWidget(self.alpha_label)
         right_layout.addWidget(self.alpha_grid, stretch=1)
@@ -548,6 +549,8 @@ class ControlWindow(QtWidgets.QWidget):
         main_layout.addWidget(splitter)
         self.setLayout(main_layout)
         self.show()
+
+        self.team_box.currentIndexChanged.connect(self.update_gm_vs_players_grid_hiding)
 
     def set_ship_idx(self, idx):
         self.selected_ship_idx = idx
@@ -729,6 +732,21 @@ class ControlWindow(QtWidgets.QWidget):
             self.gm_vs_players_btn.setText("GM vs Players Mode: ON")
         else:
             self.gm_vs_players_btn.setText("GM vs Players Mode: OFF")
+        self.update_gm_vs_players_grid_hiding()
+
+    def update_gm_vs_players_grid_hiding(self):
+        if self.gm_vs_players_mode:
+            # Hide ships only on the opponent's grid
+            gm_team = self.team_box.currentText()
+            if gm_team == "Alpha":
+                self.alpha_grid.hide_ships = False
+                self.omega_grid.hide_ships = True
+            else:
+                self.alpha_grid.hide_ships = True
+                self.omega_grid.hide_ships = False
+        else:
+            self.alpha_grid.hide_ships = False
+            self.omega_grid.hide_ships = False
         self.alpha_grid.update()
         self.omega_grid.update()
 
