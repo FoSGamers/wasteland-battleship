@@ -493,21 +493,6 @@ class ControlWindow(QtWidgets.QWidget):
         left_layout.addLayout(ship_layout)
         left_layout.addLayout(game_layout)
         left_layout.addWidget(log_scroll, stretch=1)
-
-        # --- Right Layout: ship grids stacked vertically ---
-        right_layout = QtWidgets.QVBoxLayout()
-        right_layout.addWidget(self.alpha_label)
-        right_layout.addWidget(alpha_grid_scroll, stretch=1)
-        right_layout.addWidget(self.omega_label)
-        right_layout.addWidget(omega_grid_scroll, stretch=1)
-        right_layout.setStretchFactor(alpha_grid_scroll, 1)
-        right_layout.setStretchFactor(omega_grid_scroll, 1)
-
-        # --- Main Layout: side by side ---
-        main_layout = QtWidgets.QHBoxLayout(self)
-        main_layout.addLayout(left_layout, stretch=2)
-        main_layout.addLayout(right_layout, stretch=1)
-        self.setLayout(main_layout)
         # Add status bar
         self.status_bar = QtWidgets.QStatusBar()
         self.status_bar.showMessage("Ready")
@@ -528,6 +513,31 @@ class ControlWindow(QtWidgets.QWidget):
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
         left_layout.setMenuBar(menu_bar)
+        # Create a QWidget for the left panel
+        left_widget = QtWidgets.QWidget()
+        left_widget.setLayout(left_layout)
+
+        # --- Right Layout: ship grids stacked vertically ---
+        right_layout = QtWidgets.QVBoxLayout()
+        right_layout.addWidget(self.alpha_label)
+        right_layout.addWidget(alpha_grid_scroll, stretch=1)
+        right_layout.addWidget(self.omega_label)
+        right_layout.addWidget(omega_grid_scroll, stretch=1)
+        right_layout.setStretchFactor(alpha_grid_scroll, 1)
+        right_layout.setStretchFactor(omega_grid_scroll, 1)
+        # Create a QWidget for the right panel
+        right_widget = QtWidgets.QWidget()
+        right_widget.setLayout(right_layout)
+
+        # --- Main Layout: QSplitter for left/right ---
+        splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
+        splitter.addWidget(left_widget)
+        splitter.addWidget(right_widget)
+        splitter.setSizes([400, 800])  # Initial sizes
+        splitter.setHandleWidth(8)     # Make the handle visible and easy to grab
+        main_layout = QtWidgets.QVBoxLayout(self)
+        main_layout.addWidget(splitter)
+        self.setLayout(main_layout)
         self.show()
 
     def set_ship_idx(self, idx):
