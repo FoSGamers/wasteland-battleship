@@ -142,20 +142,27 @@ class DisplayWindow(QtWidgets.QWidget):
         super().__init__()
         self.setWindowTitle("Wasteland Grid Display")
         self.game_state = game_state
-        self.setFixedSize(GRID_SIZE * CELL_SIZE * 2 + 100, GRID_SIZE * CELL_SIZE + 40)
+        self.setMinimumSize(GRID_SIZE * CELL_SIZE * 2 + 100, GRID_SIZE * CELL_SIZE + 40)
         self.show()
 
     def paintEvent(self, event):
         painter = QtGui.QPainter(self)
-        for grid, color_base, offset_x in [
+        width = self.width()
+        height = self.height()
+        grid_width = (width - 100) // 2
+        grid_height = height - 40
+        cell_size_x = grid_width // GRID_SIZE
+        cell_size_y = grid_height // GRID_SIZE
+        cell_size = min(cell_size_x, cell_size_y)
+        for idx, (grid, color_base, offset_x) in enumerate([
             (self.game_state.grid_alpha, ALPHA_COLOR, 20),
-            (self.game_state.grid_omega, OMEGA_COLOR, GRID_SIZE * CELL_SIZE + 60),
-        ]:
+            (self.game_state.grid_omega, OMEGA_COLOR, grid_width + 60),
+        ]):
             for x in range(GRID_SIZE):
                 for y in range(GRID_SIZE):
                     color = grid[(x, y)]
                     display_color = color_base if color == EMPTY_COLOR else color
-                    rect = QtCore.QRect(offset_x + x * CELL_SIZE, 20 + y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+                    rect = QtCore.QRect(offset_x + x * cell_size, 20 + y * cell_size, cell_size, cell_size)
                     painter.fillRect(rect, QtGui.QColor(display_color))
                     painter.drawRect(rect)
 
@@ -167,16 +174,21 @@ class ShipPlacementGrid(QtWidgets.QWidget):
         self.update_callback = update_callback
         self.get_selected_ship = get_selected_ship
         self.get_orientation = get_orientation
-        self.setFixedSize(GRID_SIZE * CELL_SIZE, GRID_SIZE * CELL_SIZE)
+        self.setMinimumSize(GRID_SIZE * CELL_SIZE, GRID_SIZE * CELL_SIZE)
         self.setToolTip(f"Drag-and-drop to place/remove ships for {team}")
 
     def paintEvent(self, event):
         painter = QtGui.QPainter(self)
+        width = self.width()
+        height = self.height()
+        cell_size_x = width // GRID_SIZE
+        cell_size_y = height // GRID_SIZE
+        cell_size = min(cell_size_x, cell_size_y)
         color_base = ALPHA_COLOR if self.team == "Alpha" else OMEGA_COLOR
         ships = self.game_state.ships_alpha if self.team == "Alpha" else self.game_state.ships_omega
         for x in range(GRID_SIZE):
             for y in range(GRID_SIZE):
-                rect = QtCore.QRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+                rect = QtCore.QRect(x * cell_size, y * cell_size, cell_size, cell_size)
                 painter.fillRect(rect, QtGui.QColor(color_base))
                 painter.drawRect(rect)
         for idx, (shape, origin, orientation) in enumerate(ships):
@@ -187,21 +199,24 @@ class ShipPlacementGrid(QtWidgets.QWidget):
                 else:
                     x, y = origin[0] + dy, origin[1] - dx
                 if 0 <= x < GRID_SIZE and 0 <= y < GRID_SIZE:
-                    rect = QtCore.QRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+                    rect = QtCore.QRect(x * cell_size, y * cell_size, cell_size, cell_size)
                     painter.fillRect(rect, QtGui.QColor(color))
                     painter.drawRect(rect)
 
     def mousePressEvent(self, event):
-        x = event.x() // CELL_SIZE
-        y = event.y() // CELL_SIZE
+        width = self.width()
+        height = self.height()
+        cell_size_x = width // GRID_SIZE
+        cell_size_y = height // GRID_SIZE
+        cell_size = min(cell_size_x, cell_size_y)
+        x = event.x() // cell_size
+        y = event.y() // cell_size
         if 0 <= x < GRID_SIZE and 0 <= y < GRID_SIZE:
             coord = (x, y)
-            # Remove ship if clicking on one
             if self.game_state.remove_ship_at(self.team, coord):
                 self.update()
                 self.update_callback()
                 return
-            # Otherwise, try to add selected ship
             shape = self.get_selected_ship()
             orientation = self.get_orientation()
             if shape and self.game_state.can_place_ship(self.team, shape, coord, orientation):
@@ -261,7 +276,6 @@ class ControlWindow(QtWidgets.QWidget):
         self.setWindowTitle("Wasteland GM Control Panel")
         self.game_state = game_state
         self.display_window = display_window
-        self.setFixedSize(1200, 700)
         self.stats_panel = None
         self.leaderboard_panel = None
         self.selected_ship_idx = 0
@@ -269,96 +283,100 @@ class ControlWindow(QtWidgets.QWidget):
         self.initUI()
 
     def initUI(self):
-        self.name_input = QtWidgets.QLineEdit(self)
+        # --- Top: Shot Controls ---
+        shot_layout = QtWidgets.QHBoxLayout()
+        self.name_input = QtWidgets.QLineEdit()
         self.name_input.setPlaceholderText("Player Name")
-        self.name_input.setGeometry(20, 20, 180, 30)
-
-        self.coord_input = QtWidgets.QLineEdit(self)
+        self.coord_input = QtWidgets.QLineEdit()
         self.coord_input.setPlaceholderText("Enter Coordinate (e.g., B4)")
-        self.coord_input.setGeometry(220, 20, 100, 30)
-
-        self.team_box = QtWidgets.QComboBox(self)
+        self.team_box = QtWidgets.QComboBox()
         self.team_box.addItems(["Alpha", "Omega"])
-        self.team_box.setGeometry(340, 20, 100, 30)
-
-        self.fire_btn = QtWidgets.QPushButton("FIRE!", self)
-        self.fire_btn.setGeometry(170, 60, 100, 40)
+        self.fire_btn = QtWidgets.QPushButton("FIRE!")
         self.fire_btn.clicked.connect(self.fire_shot)
-
-        self.undo_btn = QtWidgets.QPushButton("Undo", self)
-        self.undo_btn.setGeometry(290, 60, 100, 40)
+        self.undo_btn = QtWidgets.QPushButton("Undo")
         self.undo_btn.clicked.connect(self.undo_shot)
-
-        self.reset_btn = QtWidgets.QPushButton("Reset Game", self)
-        self.reset_btn.setGeometry(410, 60, 100, 40)
+        self.reset_btn = QtWidgets.QPushButton("Reset Game")
         self.reset_btn.clicked.connect(self.reset_game)
+        shot_layout.addWidget(self.name_input)
+        shot_layout.addWidget(self.coord_input)
+        shot_layout.addWidget(self.team_box)
+        shot_layout.addWidget(self.fire_btn)
+        shot_layout.addWidget(self.undo_btn)
+        shot_layout.addWidget(self.reset_btn)
 
-        # Ship selection
-        self.ship_select = QtWidgets.QComboBox(self)
+        # --- Ship Placement Controls ---
+        ship_layout = QtWidgets.QHBoxLayout()
+        self.ship_select = QtWidgets.QComboBox()
         for name, _ in SHIP_SHAPES:
             self.ship_select.addItem(name)
-        self.ship_select.setGeometry(20, 110, 200, 30)
         self.ship_select.currentIndexChanged.connect(self.set_ship_idx)
-
-        self.rotate_btn = QtWidgets.QPushButton("Rotate Ship", self)
-        self.rotate_btn.setGeometry(230, 110, 100, 30)
+        self.rotate_btn = QtWidgets.QPushButton("Rotate Ship")
         self.rotate_btn.clicked.connect(self.rotate_ship)
-
-        self.ship_team = QtWidgets.QComboBox(self)
+        self.ship_team = QtWidgets.QComboBox()
         self.ship_team.addItems(["Alpha", "Omega"])
-        self.ship_team.setGeometry(340, 110, 80, 30)
-
-        self.place_btn = QtWidgets.QPushButton("Place Ship (Text)", self)
-        self.place_btn.setGeometry(430, 110, 120, 30)
+        self.place_btn = QtWidgets.QPushButton("Place Ship (Text)")
         self.place_btn.clicked.connect(self.place_ship_text)
-
-        self.ship_entry = QtWidgets.QLineEdit(self)
+        self.ship_entry = QtWidgets.QLineEdit()
         self.ship_entry.setPlaceholderText("Set ship origin: A1")
-        self.ship_entry.setGeometry(560, 110, 100, 30)
+        ship_layout.addWidget(self.ship_select)
+        ship_layout.addWidget(self.rotate_btn)
+        ship_layout.addWidget(self.ship_team)
+        ship_layout.addWidget(self.place_btn)
+        ship_layout.addWidget(self.ship_entry)
 
-        # Drag-and-drop grids
-        self.alpha_grid = ShipPlacementGrid(self.game_state, "Alpha", self.update_grids, self.get_selected_ship, self.get_orientation)
-        self.alpha_grid.setParent(self)
-        self.alpha_grid.move(850, 20)
-        self.omega_grid = ShipPlacementGrid(self.game_state, "Omega", self.update_grids, self.get_selected_ship, self.get_orientation)
-        self.omega_grid.setParent(self)
-        self.omega_grid.move(850, 20 + GRID_SIZE * CELL_SIZE + 20)
-        self.alpha_label = QtWidgets.QLabel("Alpha Ship Grid", self)
-        self.alpha_label.setGeometry(850, 0, 200, 20)
-        self.omega_label = QtWidgets.QLabel("Omega Ship Grid", self)
-        self.omega_label.setGeometry(850, 20 + GRID_SIZE * CELL_SIZE, 200, 20)
-
-        self.save_log_btn = QtWidgets.QPushButton("Save Log", self)
-        self.save_log_btn.setGeometry(20, 150, 100, 30)
+        # --- Game/Stats Controls ---
+        game_layout = QtWidgets.QHBoxLayout()
+        self.save_log_btn = QtWidgets.QPushButton("Save Log")
         self.save_log_btn.clicked.connect(self.save_log)
-
-        self.export_hit_btn = QtWidgets.QPushButton("Export HIT Buyers", self)
-        self.export_hit_btn.setGeometry(130, 150, 150, 30)
+        self.export_hit_btn = QtWidgets.QPushButton("Export HIT Buyers")
         self.export_hit_btn.clicked.connect(self.export_hit_buyers)
-
-        self.alpha_win_btn = QtWidgets.QPushButton("Alpha Wins", self)
-        self.alpha_win_btn.setGeometry(300, 150, 100, 30)
+        self.alpha_win_btn = QtWidgets.QPushButton("Alpha Wins")
         self.alpha_win_btn.clicked.connect(self.alpha_win)
-
-        self.omega_win_btn = QtWidgets.QPushButton("Omega Wins", self)
-        self.omega_win_btn.setGeometry(410, 150, 100, 30)
+        self.omega_win_btn = QtWidgets.QPushButton("Omega Wins")
         self.omega_win_btn.clicked.connect(self.omega_win)
-
-        self.win_label = QtWidgets.QLabel(self)
-        self.win_label.setGeometry(520, 150, 70, 30)
+        self.win_label = QtWidgets.QLabel()
         self.update_win_label()
-
-        self.stats_btn = QtWidgets.QPushButton("Show Advanced Stats", self)
-        self.stats_btn.setGeometry(600, 150, 150, 30)
+        self.stats_btn = QtWidgets.QPushButton("Show Advanced Stats")
         self.stats_btn.clicked.connect(self.toggle_stats)
-
-        self.leaderboard_btn = QtWidgets.QPushButton("Show Leaderboard", self)
-        self.leaderboard_btn.setGeometry(760, 150, 150, 30)
+        self.leaderboard_btn = QtWidgets.QPushButton("Show Leaderboard")
         self.leaderboard_btn.clicked.connect(self.toggle_leaderboard)
+        game_layout.addWidget(self.save_log_btn)
+        game_layout.addWidget(self.export_hit_btn)
+        game_layout.addWidget(self.alpha_win_btn)
+        game_layout.addWidget(self.omega_win_btn)
+        game_layout.addWidget(self.win_label)
+        game_layout.addWidget(self.stats_btn)
+        game_layout.addWidget(self.leaderboard_btn)
 
-        self.log_box = QtWidgets.QTextEdit(self)
-        self.log_box.setGeometry(20, 190, 800, 480)
+        # --- Log ---
+        self.log_box = QtWidgets.QTextEdit()
         self.log_box.setReadOnly(True)
+        self.log_box.setMinimumHeight(200)
+
+        # --- Ship Grids ---
+        grid_layout = QtWidgets.QVBoxLayout()
+        self.alpha_label = QtWidgets.QLabel("Alpha Ship Grid")
+        self.alpha_grid = ShipPlacementGrid(self.game_state, "Alpha", self.update_grids, self.get_selected_ship, self.get_orientation)
+        self.omega_label = QtWidgets.QLabel("Omega Ship Grid")
+        self.omega_grid = ShipPlacementGrid(self.game_state, "Omega", self.update_grids, self.get_selected_ship, self.get_orientation)
+        grid_layout.addWidget(self.alpha_label)
+        grid_layout.addWidget(self.alpha_grid)
+        grid_layout.addWidget(self.omega_label)
+        grid_layout.addWidget(self.omega_grid)
+        grid_layout.setStretch(1, 1)
+        grid_layout.setStretch(3, 1)
+
+        # --- Main Layout ---
+        left_layout = QtWidgets.QVBoxLayout()
+        left_layout.addLayout(shot_layout)
+        left_layout.addLayout(ship_layout)
+        left_layout.addLayout(game_layout)
+        left_layout.addWidget(self.log_box, stretch=1)
+
+        main_layout = QtWidgets.QHBoxLayout(self)
+        main_layout.addLayout(left_layout, stretch=2)
+        main_layout.addLayout(grid_layout, stretch=1)
+        self.setLayout(main_layout)
         self.show()
 
     def set_ship_idx(self, idx):
