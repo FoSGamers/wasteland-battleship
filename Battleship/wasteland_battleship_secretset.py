@@ -1,5 +1,6 @@
 import sys, random, string, csv
-from PyQt5 import QtWidgets, QtGui, QtCore
+from PySide6 import QtWidgets, QtGui, QtCore
+from PySide6.QtCore import QCoreApplication
 
 GRID_SIZE = 8
 CELL_SIZE = 50
@@ -277,16 +278,20 @@ class ShipPlacementGrid(QtWidgets.QWidget):
         cell_size = min(cell_size_x, cell_size_y)
         color_base = ALPHA_COLOR if self.team == "Alpha" else OMEGA_COLOR
         ships = self.game_state.ships_alpha if self.team == "Alpha" else self.game_state.ships_omega
-        for x in range(GRID_SIZE):
-            for y in range(GRID_SIZE):
-                rect = QtCore.QRectF(x * cell_size, y * cell_size, cell_size, cell_size)
-                painter.fillRect(rect, QtGui.QColor(color_base))
-                painter.drawRect(rect)
-        # Hide ships if GM vs Players mode is on and this is the GM's window
+        # GM vs Players mode: show ships only on GM's grid, hide on opponent's
         show_ships = True
         if self.control_window and getattr(self.control_window, 'gm_vs_players_mode', False):
-            show_ships = False
+            gm_team = self.control_window.gm_team_box.currentText()
+            if self.team == gm_team:
+                show_ships = True
+            else:
+                show_ships = False
         if show_ships:
+            for x in range(GRID_SIZE):
+                for y in range(GRID_SIZE):
+                    rect = QtCore.QRectF(x * cell_size, y * cell_size, cell_size, cell_size)
+                    painter.fillRect(rect, QtGui.QColor(color_base))
+                    painter.drawRect(rect)
             for idx, (shape, origin, orientation) in enumerate(ships):
                 color = SHIP_COLORS[idx % len(SHIP_COLORS)]
                 for dx, dy in shape:
@@ -390,16 +395,16 @@ class ControlWindow(QtWidgets.QWidget):
         # --- Menu bar (define next so it's available for layout) ---
         menu_bar = QtWidgets.QMenuBar()
         game_menu = menu_bar.addMenu("Game")
-        new_action = QtWidgets.QAction("New Game", self)
+        new_action = QtGui.QAction("New Game", self)
         new_action.setShortcut("Ctrl+N")
         new_action.triggered.connect(self.reset_game)
-        exit_action = QtWidgets.QAction("Exit", self)
+        exit_action = QtGui.QAction("Exit", self)
         exit_action.setShortcut("Ctrl+Q")
-        exit_action.triggered.connect(QtWidgets.qApp.quit)
+        exit_action.triggered.connect(QCoreApplication.quit)
         game_menu.addAction(new_action)
         game_menu.addAction(exit_action)
         help_menu = menu_bar.addMenu("Help")
-        about_action = QtWidgets.QAction("About", self)
+        about_action = QtGui.QAction("About", self)
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
 
@@ -516,25 +521,73 @@ class ControlWindow(QtWidgets.QWidget):
         gm_toggle_widget = QtWidgets.QWidget()
         gm_toggle_widget.setLayout(gm_toggle_layout)
 
+        # --- Controls Area: Professional Layout ---
+        controls_widget = QtWidgets.QWidget()
+        controls_layout = QtWidgets.QVBoxLayout()
+        controls_layout.setContentsMargins(0, 0, 0, 0)
+        controls_layout.setSpacing(12)
+
+        # Row 0: Menu bar
+        controls_layout.addWidget(menu_bar)
+
+        # Row 1: Shot Controls (in QGroupBox)
+        shot_group.setStyleSheet("QGroupBox { font-weight: bold; }")
+        controls_layout.addWidget(shot_group)
+
+        # Row 2: Ship Placement (in QGroupBox)
+        ship_group.setStyleSheet("QGroupBox { font-weight: bold; }")
+        controls_layout.addWidget(ship_group)
+
+        # Row 3: Randomization (in QGroupBox)
+        rand_group.setStyleSheet("QGroupBox { font-weight: bold; }")
+        controls_layout.addWidget(rand_group)
+
+        # Row 4: Game/Stats (in QGroupBox)
+        game_group.setStyleSheet("QGroupBox { font-weight: bold; }")
+        controls_layout.addWidget(game_group)
+
+        # Row 5: GM vs Players toggle (in QGroupBox)
+        gm_toggle_box = QtWidgets.QGroupBox("GM Mode")
+        gm_toggle_box.setStyleSheet("QGroupBox { font-weight: bold; }")
+        gm_toggle_layout_outer = QtWidgets.QVBoxLayout()
+        gm_toggle_layout_outer.addWidget(gm_toggle_widget)
+        gm_toggle_box.setLayout(gm_toggle_layout_outer)
+        controls_layout.addWidget(gm_toggle_box)
+
+        # Row 6: Spacer
+        controls_layout.addStretch(1)
+
+        # Row 7: Status bar
+        controls_layout.addWidget(self.status_bar)
+
+        controls_widget.setLayout(controls_layout)
+        controls_widget.setMinimumHeight(200)
+
+        # Set consistent button width for all QPushButton in controls area
+        min_btn_width = 120
+        for group in [shot_group, ship_group, rand_group, game_group]:
+            for btn in group.findChildren(QtWidgets.QPushButton):
+                btn.setMinimumWidth(min_btn_width)
+
         # --- Log Box ---
         self.log_box = QtWidgets.QTextEdit()
         self.log_box.setReadOnly(True)
         self.log_box.setMinimumHeight(100)
         self.log_box.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
 
-        # --- Left Panel Layout ---
+        # --- Left Panel Splitter (vertical) ---
+        left_splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical)
+        left_splitter.addWidget(controls_widget)
+        left_splitter.addWidget(self.log_box)
+        left_splitter.setSizes([350, 150])
+        left_splitter.setHandleWidth(10)
+        left_splitter.setCollapsible(0, False)
+        left_splitter.setCollapsible(1, False)
+        left_panel = QtWidgets.QWidget()
         left_panel_layout = QtWidgets.QVBoxLayout()
         left_panel_layout.setContentsMargins(8, 8, 8, 8)
-        left_panel_layout.setSpacing(12)
-        left_panel_layout.addWidget(menu_bar)
-        left_panel_layout.addWidget(shot_group)
-        left_panel_layout.addWidget(ship_group)
-        left_panel_layout.addWidget(rand_group)
-        left_panel_layout.addWidget(game_group)
-        left_panel_layout.addWidget(gm_toggle_widget)
-        left_panel_layout.addWidget(self.log_box, stretch=1)
-        left_panel_layout.addWidget(self.status_bar)
-        left_panel = QtWidgets.QWidget()
+        left_panel_layout.setSpacing(0)
+        left_panel_layout.addWidget(left_splitter)
         left_panel.setLayout(left_panel_layout)
         left_panel.setMinimumWidth(340)
 
@@ -568,6 +621,7 @@ class ControlWindow(QtWidgets.QWidget):
         self.alpha_grid = None
         self.omega_grid = None
         self.gm_grid = None
+        self.opp_grid = None
         self.update_right_panel()  # Set initial grid(s)
 
     def set_ship_idx(self, idx):
@@ -586,11 +640,17 @@ class ControlWindow(QtWidgets.QWidget):
     def update_grids(self):
         if self.gm_vs_players_mode:
             if self.gm_grid:
+                self.gm_grid.hide_ships = False
                 self.gm_grid.update()
+            if hasattr(self, 'opp_grid') and self.opp_grid:
+                self.opp_grid.hide_ships = True
+                self.opp_grid.update()
         else:
             if self.alpha_grid:
+                self.alpha_grid.hide_ships = False
                 self.alpha_grid.update()
             if self.omega_grid:
+                self.omega_grid.hide_ships = False
                 self.omega_grid.update()
 
     def update_win_label(self):
@@ -768,16 +828,24 @@ class ControlWindow(QtWidgets.QWidget):
         self.alpha_grid = None
         self.omega_grid = None
         self.gm_grid = None
+        self.opp_grid = None
         if self.gm_vs_players_mode:
-            # Only show the selected team's grid
-            team = self.gm_team_box.currentText()
-            self.grid_label.setText(f"{team} Ship Grid")
-            self.gm_grid = ShipPlacementGrid(self.game_state, team, self.update_grids, self.get_selected_ship, self.get_orientation, self, hide_ships=False)
+            gm_team = self.gm_team_box.currentText()
+            opp_team = "Omega" if gm_team == "Alpha" else "Alpha"
+            self.grid_label.setText(f"{gm_team} (GM) and {opp_team} (Players) Ship Grids")
+            # GM's team grid (ships visible)
+            self.gm_grid = ShipPlacementGrid(self.game_state, gm_team, self.update_grids, self.get_selected_ship, self.get_orientation, self, hide_ships=False)
             self.gm_grid.setMinimumSize(300, 300)
+            # Opponent's grid (ships hidden/blank)
+            self.opp_grid = ShipPlacementGrid(self.game_state, opp_team, self.update_grids, self.get_selected_ship, self.get_orientation, self, hide_ships=True)
+            self.opp_grid.setMinimumSize(300, 300)
+            self.grid_container_layout.addWidget(QtWidgets.QLabel(f"{gm_team} Ship Grid (GM)"))
             self.grid_container_layout.addWidget(self.gm_grid)
+            self.grid_container_layout.addWidget(QtWidgets.QLabel(f"{opp_team} Ship Grid (Players, Hidden)"))
+            self.grid_container_layout.addWidget(self.opp_grid)
             self.update_gm_vs_players_grid_hiding()
         else:
-            # Show both grids stacked
+            # Show both grids stacked, all ships visible
             self.grid_label.setText("Alpha and Omega Ship Grids")
             self.alpha_grid = ShipPlacementGrid(self.game_state, "Alpha", self.update_grids, self.get_selected_ship, self.get_orientation, self, hide_ships=False)
             self.omega_grid = ShipPlacementGrid(self.game_state, "Omega", self.update_grids, self.get_selected_ship, self.get_orientation, self, hide_ships=False)
@@ -791,12 +859,12 @@ class ControlWindow(QtWidgets.QWidget):
 
     def update_gm_vs_players_grid_hiding(self):
         if self.gm_vs_players_mode:
-            if not hasattr(self, 'gm_grid') or self.gm_grid is None:
+            if not hasattr(self, 'gm_grid') or self.gm_grid is None or not hasattr(self, 'opp_grid') or self.opp_grid is None:
                 return
-            gm_team = self.gm_team_box.currentText()
-            # Hide ships only on the opponent's grid (but only one grid is shown)
             self.gm_grid.hide_ships = False
             self.gm_grid.update()
+            self.opp_grid.hide_ships = True
+            self.opp_grid.update()
         else:
             # Both grids visible, always show ships
             if self.alpha_grid:
