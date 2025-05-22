@@ -251,14 +251,14 @@ class DisplayWindow(QtWidgets.QWidget):
         painter.setPen(QtGui.QColor("black"))
 
 class ShipPlacementGrid(QtWidgets.QWidget):
-    def __init__(self, game_state, team, update_callback, get_selected_ship, get_orientation):
+    def __init__(self, game_state, team, update_callback, get_selected_ship, get_orientation, control_window=None):
         super().__init__()
         self.game_state = game_state
         self.team = team
         self.update_callback = update_callback
         self.get_selected_ship = get_selected_ship
         self.get_orientation = get_orientation
-        # Remove setMinimumSize for full responsiveness
+        self.control_window = control_window
         self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         self.setToolTip(f"Drag-and-drop to place/remove ships for {team}")
 
@@ -280,17 +280,22 @@ class ShipPlacementGrid(QtWidgets.QWidget):
                 rect = QtCore.QRectF(x * cell_size, y * cell_size, cell_size, cell_size)
                 painter.fillRect(rect, QtGui.QColor(color_base))
                 painter.drawRect(rect)
-        for idx, (shape, origin, orientation) in enumerate(ships):
-            color = SHIP_COLORS[idx % len(SHIP_COLORS)]
-            for dx, dy in shape:
-                if orientation == 0:
-                    x, y = origin[0] + dx, origin[1] + dy
-                else:
-                    x, y = origin[0] + dy, origin[1] - dx
-                if 0 <= x < GRID_SIZE and 0 <= y < GRID_SIZE:
-                    rect = QtCore.QRectF(x * cell_size, y * cell_size, cell_size, cell_size)
-                    painter.fillRect(rect, QtGui.QColor(color))
-                    painter.drawRect(rect)
+        # Hide ships if GM vs Players mode is on and this is the GM's window
+        show_ships = True
+        if self.control_window and getattr(self.control_window, 'gm_vs_players_mode', False):
+            show_ships = False
+        if show_ships:
+            for idx, (shape, origin, orientation) in enumerate(ships):
+                color = SHIP_COLORS[idx % len(SHIP_COLORS)]
+                for dx, dy in shape:
+                    if orientation == 0:
+                        x, y = origin[0] + dx, origin[1] + dy
+                    else:
+                        x, y = origin[0] + dy, origin[1] - dx
+                    if 0 <= x < GRID_SIZE and 0 <= y < GRID_SIZE:
+                        rect = QtCore.QRectF(x * cell_size, y * cell_size, cell_size, cell_size)
+                        painter.fillRect(rect, QtGui.QColor(color))
+                        painter.drawRect(rect)
 
     def mousePressEvent(self, event):
         width = self.width()
@@ -369,11 +374,10 @@ class ControlWindow(QtWidgets.QWidget):
         self.leaderboard_panel = None
         self.selected_ship_idx = 0
         self.orientation = 0  # 0: horizontal
+        self.gm_vs_players_mode = False
         self.initUI()
-        # Set a reasonable default size and make resizable
         self.resize(1200, 800)
         self.setMinimumSize(800, 600)
-        # Ensure window never exceeds screen size
         screen = QtWidgets.QApplication.primaryScreen().availableGeometry()
         self.setMaximumSize(screen.width(), screen.height())
 
@@ -461,41 +465,40 @@ class ControlWindow(QtWidgets.QWidget):
         game_layout.addWidget(self.stats_btn)
         game_layout.addWidget(self.leaderboard_btn)
 
+        # --- GM vs Players Toggle ---
+        self.gm_vs_players_btn = QtWidgets.QPushButton("GM vs Players Mode: OFF")
+        self.gm_vs_players_btn.setCheckable(True)
+        self.gm_vs_players_btn.setToolTip("Toggle GM vs Players mode. When ON, ships are hidden from GM.")
+        self.gm_vs_players_btn.toggled.connect(self.toggle_gm_vs_players_mode)
+        game_layout.addWidget(self.gm_vs_players_btn)
+
         # --- Log ---
         self.log_box = QtWidgets.QTextEdit()
         self.log_box.setReadOnly(True)
         self.log_box.setMinimumHeight(100)
         self.log_box.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
-        # Make log scrollable if needed
         log_scroll = QtWidgets.QScrollArea()
         log_scroll.setWidgetResizable(True)
         log_scroll.setWidget(self.log_box)
         log_scroll.setMinimumHeight(100)
         log_scroll.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
 
-        # --- Ship Grids ---
-        self.alpha_label = QtWidgets.QLabel("Alpha Ship Grid")
-        self.alpha_grid = ShipPlacementGrid(self.game_state, "Alpha", self.update_grids, self.get_selected_ship, self.get_orientation)
-        self.omega_label = QtWidgets.QLabel("Omega Ship Grid")
-        self.omega_grid = ShipPlacementGrid(self.game_state, "Omega", self.update_grids, self.get_selected_ship, self.get_orientation)
-        # Make grids scrollable if needed
-        alpha_grid_scroll = QtWidgets.QScrollArea()
-        alpha_grid_scroll.setWidgetResizable(True)
-        alpha_grid_scroll.setWidget(self.alpha_grid)
-        omega_grid_scroll = QtWidgets.QScrollArea()
-        omega_grid_scroll.setWidgetResizable(True)
-        omega_grid_scroll.setWidget(self.omega_grid)
-
-        # --- Left Layout: controls and log ---
-        left_layout = QtWidgets.QVBoxLayout()
-        left_layout.addLayout(shot_layout)
-        left_layout.addLayout(ship_row_layout)
-        left_layout.addLayout(game_layout)
-        left_layout.addWidget(log_scroll, stretch=1)
+        # --- Left Controls Widget (top: controls, bottom: log, with splitter) ---
+        controls_widget = QtWidgets.QWidget()
+        controls_layout = QtWidgets.QVBoxLayout()
+        controls_layout.addLayout(shot_layout)
+        controls_layout.addLayout(ship_row_layout)
+        controls_layout.addLayout(game_layout)
+        controls_layout.addStretch(1)
+        controls_widget.setLayout(controls_layout)
+        left_splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical)
+        left_splitter.addWidget(controls_widget)
+        left_splitter.addWidget(log_scroll)
+        left_splitter.setSizes([300, 100])
+        left_splitter.setHandleWidth(6)
         # Add status bar
         self.status_bar = QtWidgets.QStatusBar()
         self.status_bar.showMessage("Ready")
-        left_layout.addWidget(self.status_bar)
         # Add menu bar
         menu_bar = QtWidgets.QMenuBar()
         game_menu = menu_bar.addMenu("Game")
@@ -511,29 +514,36 @@ class ControlWindow(QtWidgets.QWidget):
         about_action = QtWidgets.QAction("About", self)
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
-        left_layout.setMenuBar(menu_bar)
-        # Create a QWidget for the left panel
-        left_widget = QtWidgets.QWidget()
-        left_widget.setLayout(left_layout)
+        # Left panel widget
+        left_panel = QtWidgets.QWidget()
+        left_panel_layout = QtWidgets.QVBoxLayout()
+        left_panel_layout.setContentsMargins(0, 0, 0, 0)
+        left_panel_layout.addWidget(menu_bar)
+        left_panel_layout.addWidget(left_splitter)
+        left_panel_layout.addWidget(self.status_bar)
+        left_panel.setLayout(left_panel_layout)
 
         # --- Right Layout: ship grids stacked vertically ---
+        self.alpha_label = QtWidgets.QLabel("Alpha Ship Grid")
+        self.alpha_grid = ShipPlacementGrid(self.game_state, "Alpha", self.update_grids, self.get_selected_ship, self.get_orientation, self)
+        self.omega_label = QtWidgets.QLabel("Omega Ship Grid")
+        self.omega_grid = ShipPlacementGrid(self.game_state, "Omega", self.update_grids, self.get_selected_ship, self.get_orientation, self)
         right_layout = QtWidgets.QVBoxLayout()
         right_layout.addWidget(self.alpha_label)
-        right_layout.addWidget(alpha_grid_scroll, stretch=1)
+        right_layout.addWidget(self.alpha_grid, stretch=1)
         right_layout.addWidget(self.omega_label)
-        right_layout.addWidget(omega_grid_scroll, stretch=1)
-        right_layout.setStretchFactor(alpha_grid_scroll, 1)
-        right_layout.setStretchFactor(omega_grid_scroll, 1)
-        # Create a QWidget for the right panel
-        right_widget = QtWidgets.QWidget()
-        right_widget.setLayout(right_layout)
+        right_layout.addWidget(self.omega_grid, stretch=1)
+        right_layout.setStretchFactor(self.alpha_grid, 1)
+        right_layout.setStretchFactor(self.omega_grid, 1)
+        right_panel = QtWidgets.QWidget()
+        right_panel.setLayout(right_layout)
 
         # --- Main Layout: QSplitter for left/right ---
         splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
-        splitter.addWidget(left_widget)
-        splitter.addWidget(right_widget)
-        splitter.setSizes([400, 800])  # Initial sizes
-        splitter.setHandleWidth(8)     # Make the handle visible and easy to grab
+        splitter.addWidget(left_panel)
+        splitter.addWidget(right_panel)
+        splitter.setSizes([400, 800])
+        splitter.setHandleWidth(8)
         main_layout = QtWidgets.QVBoxLayout(self)
         main_layout.addWidget(splitter)
         self.setLayout(main_layout)
@@ -712,6 +722,15 @@ class ControlWindow(QtWidgets.QWidget):
 
     def show_about(self):
         QtWidgets.QMessageBox.about(self, "About", "Wasteland Battleship\nModernized PyQt5 Edition\n\nUpgraded UI/UX and resizable windows.")
+
+    def toggle_gm_vs_players_mode(self, checked):
+        self.gm_vs_players_mode = checked
+        if checked:
+            self.gm_vs_players_btn.setText("GM vs Players Mode: ON")
+        else:
+            self.gm_vs_players_btn.setText("GM vs Players Mode: OFF")
+        self.alpha_grid.update()
+        self.omega_grid.update()
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
