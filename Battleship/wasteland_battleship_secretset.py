@@ -137,34 +137,109 @@ class GameState:
                 team_stats[team]["misses"] += 1
         return player_stats, team_stats
 
+    def randomize_ships(self, team, ship_indices=None):
+        # ship_indices: list of indices in SHIP_SHAPES to randomize, or None for all
+        if team == "Alpha":
+            self.ships_alpha = []
+        else:
+            self.ships_omega = []
+        placed = set()
+        indices = ship_indices if ship_indices is not None else list(range(len(SHIP_SHAPES)))
+        for idx in indices:
+            shape = SHIP_SHAPES[idx][1]
+            for attempt in range(100):
+                orientation = random.choice([0, 1])
+                if orientation == 0:
+                    max_x = GRID_SIZE - max(dx for dx, dy in shape)
+                    max_y = GRID_SIZE - max(dy for dx, dy in shape)
+                else:
+                    max_x = GRID_SIZE - max(dy for dx, dy in shape)
+                    max_y = GRID_SIZE - max(dx for dx, dy in shape)
+                origin = (random.randint(0, max_x - 1), random.randint(0, max_y - 1))
+                if self.can_place_ship(team, shape, origin, orientation):
+                    self.add_ship(team, shape, origin, orientation)
+                    break
+        # After randomizing, update placed_coords
+        if team == "Alpha":
+            self.placed_coords_alpha = self.get_ship_coords("Alpha")
+        else:
+            self.placed_coords_omega = self.get_ship_coords("Omega")
+
 class DisplayWindow(QtWidgets.QWidget):
     def __init__(self, game_state):
         super().__init__()
         self.setWindowTitle("Wasteland Grid Display")
         self.game_state = game_state
-        self.setMinimumSize(GRID_SIZE * CELL_SIZE * 2 + 100, GRID_SIZE * CELL_SIZE + 40)
+        self.setMinimumSize(GRID_SIZE * CELL_SIZE + 60, GRID_SIZE * CELL_SIZE * 2 + 120)
         self.show()
 
     def paintEvent(self, event):
         painter = QtGui.QPainter(self)
         width = self.width()
         height = self.height()
-        grid_width = (width - 100) // 2
-        grid_height = height - 40
+        grid_width = width - 60
+        grid_height = (height - 120) // 2
         cell_size_x = grid_width // GRID_SIZE
         cell_size_y = grid_height // GRID_SIZE
         cell_size = min(cell_size_x, cell_size_y)
-        for idx, (grid, color_base, offset_x) in enumerate([
-            (self.game_state.grid_alpha, ALPHA_COLOR, 20),
-            (self.game_state.grid_omega, OMEGA_COLOR, grid_width + 60),
-        ]):
-            for x in range(GRID_SIZE):
-                for y in range(GRID_SIZE):
-                    color = grid[(x, y)]
-                    display_color = color_base if color == EMPTY_COLOR else color
-                    rect = QtCore.QRect(offset_x + x * cell_size, 20 + y * cell_size, cell_size, cell_size)
-                    painter.fillRect(rect, QtGui.QColor(display_color))
-                    painter.drawRect(rect)
+        font = painter.font()
+        font.setBold(True)
+        font.setPointSize(14)
+        painter.setFont(font)
+        # Draw Alpha grid
+        offset_y_alpha = 30
+        # Draw column letters
+        for x in range(GRID_SIZE):
+            painter.drawText(40 + x * cell_size, offset_y_alpha - 8, string.ascii_uppercase[x])
+        # Draw row numbers
+        for y in range(GRID_SIZE):
+            painter.drawText(18, offset_y_alpha + y * cell_size + cell_size // 2 + 6, str(y + 1))
+        for x in range(GRID_SIZE):
+            for y in range(GRID_SIZE):
+                color = self.game_state.grid_alpha[(x, y)]
+                display_color = ALPHA_COLOR if color == EMPTY_COLOR else color
+                rect = QtCore.QRect(40 + x * cell_size, offset_y_alpha + y * cell_size, cell_size, cell_size)
+                painter.fillRect(rect, QtGui.QColor(display_color))
+                painter.drawRect(rect)
+        # Draw most recent log entry between grids
+        if self.game_state.shots_log:
+            player, team, coord, result = self.game_state.shots_log[-1]
+            coord_str = f"{string.ascii_uppercase[coord[0]]}{coord[1]+1}"
+            log_line = f"{player} ({team}) fired at {coord_str}: {result}"
+            font.setPointSize(18)
+            painter.setFont(font)
+            painter.setPen(QtGui.QColor("black"))
+            y_log = offset_y_alpha + GRID_SIZE * cell_size + 24
+            painter.drawText(self.rect().adjusted(0, y_log, 0, 0), QtCore.Qt.AlignHCenter | QtCore.Qt.AlignTop, log_line)
+        # Draw Omega grid
+        offset_y_omega = grid_height + 70
+        font.setPointSize(14)
+        painter.setFont(font)
+        for x in range(GRID_SIZE):
+            painter.drawText(40 + x * cell_size, offset_y_omega - 8, string.ascii_uppercase[x])
+        for y in range(GRID_SIZE):
+            painter.drawText(18, offset_y_omega + y * cell_size + cell_size // 2 + 6, str(y + 1))
+        for x in range(GRID_SIZE):
+            for y in range(GRID_SIZE):
+                color = self.game_state.grid_omega[(x, y)]
+                display_color = OMEGA_COLOR if color == EMPTY_COLOR else color
+                rect = QtCore.QRect(40 + x * cell_size, offset_y_omega + y * cell_size, cell_size, cell_size)
+                painter.fillRect(rect, QtGui.QColor(display_color))
+                painter.drawRect(rect)
+        # Show HIT or MISS text if last shot exists
+        if self.game_state.shots_log:
+            _, _, _, result = self.game_state.shots_log[-1]
+            if result == "HIT":
+                painter.setPen(QtGui.QColor("red"))
+                font.setPointSize(48)
+                painter.setFont(font)
+                painter.drawText(self.rect(), QtCore.Qt.AlignCenter, "HIT")
+            elif result == "MISS":
+                painter.setPen(QtGui.QColor("blue"))
+                font.setPointSize(48)
+                painter.setFont(font)
+                painter.drawText(self.rect(), QtCore.Qt.AlignCenter, "MISS")
+        painter.setPen(QtGui.QColor("black"))
 
 class ShipPlacementGrid(QtWidgets.QWidget):
     def __init__(self, game_state, team, update_callback, get_selected_ship, get_orientation):
@@ -318,11 +393,24 @@ class ControlWindow(QtWidgets.QWidget):
         self.place_btn.clicked.connect(self.place_ship_text)
         self.ship_entry = QtWidgets.QLineEdit()
         self.ship_entry.setPlaceholderText("Set ship origin: A1")
+        # --- Randomize Buttons ---
+        self.randomize_all_btn = QtWidgets.QPushButton("Randomize All Ships (Both)")
+        self.randomize_all_btn.clicked.connect(self.randomize_all_ships)
+        self.randomize_alpha_btn = QtWidgets.QPushButton("Randomize Alpha")
+        self.randomize_alpha_btn.clicked.connect(lambda: self.randomize_team("Alpha"))
+        self.randomize_omega_btn = QtWidgets.QPushButton("Randomize Omega")
+        self.randomize_omega_btn.clicked.connect(lambda: self.randomize_team("Omega"))
+        self.randomize_selected_btn = QtWidgets.QPushButton("Randomize Selected Ship")
+        self.randomize_selected_btn.clicked.connect(self.randomize_selected_ship)
         ship_layout.addWidget(self.ship_select)
         ship_layout.addWidget(self.rotate_btn)
         ship_layout.addWidget(self.ship_team)
         ship_layout.addWidget(self.place_btn)
         ship_layout.addWidget(self.ship_entry)
+        ship_layout.addWidget(self.randomize_all_btn)
+        ship_layout.addWidget(self.randomize_alpha_btn)
+        ship_layout.addWidget(self.randomize_omega_btn)
+        ship_layout.addWidget(self.randomize_selected_btn)
 
         # --- Game/Stats Controls ---
         game_layout = QtWidgets.QHBoxLayout()
@@ -354,28 +442,31 @@ class ControlWindow(QtWidgets.QWidget):
         self.log_box.setMinimumHeight(200)
 
         # --- Ship Grids ---
-        grid_layout = QtWidgets.QVBoxLayout()
         self.alpha_label = QtWidgets.QLabel("Alpha Ship Grid")
         self.alpha_grid = ShipPlacementGrid(self.game_state, "Alpha", self.update_grids, self.get_selected_ship, self.get_orientation)
         self.omega_label = QtWidgets.QLabel("Omega Ship Grid")
         self.omega_grid = ShipPlacementGrid(self.game_state, "Omega", self.update_grids, self.get_selected_ship, self.get_orientation)
-        grid_layout.addWidget(self.alpha_label)
-        grid_layout.addWidget(self.alpha_grid)
-        grid_layout.addWidget(self.omega_label)
-        grid_layout.addWidget(self.omega_grid)
-        grid_layout.setStretch(1, 1)
-        grid_layout.setStretch(3, 1)
 
-        # --- Main Layout ---
+        # --- Left Layout: controls and log ---
         left_layout = QtWidgets.QVBoxLayout()
         left_layout.addLayout(shot_layout)
         left_layout.addLayout(ship_layout)
         left_layout.addLayout(game_layout)
         left_layout.addWidget(self.log_box, stretch=1)
 
+        # --- Right Layout: ship grids stacked vertically ---
+        right_layout = QtWidgets.QVBoxLayout()
+        right_layout.addWidget(self.alpha_label)
+        right_layout.addWidget(self.alpha_grid)
+        right_layout.addWidget(self.omega_label)
+        right_layout.addWidget(self.omega_grid)
+        right_layout.setStretchFactor(self.alpha_grid, 1)
+        right_layout.setStretchFactor(self.omega_grid, 1)
+
+        # --- Main Layout: side by side ---
         main_layout = QtWidgets.QHBoxLayout(self)
         main_layout.addLayout(left_layout, stretch=2)
-        main_layout.addLayout(grid_layout, stretch=1)
+        main_layout.addLayout(right_layout, stretch=1)
         self.setLayout(main_layout)
         self.show()
 
@@ -527,6 +618,28 @@ class ControlWindow(QtWidgets.QWidget):
         else:
             self.leaderboard_panel = LeaderboardPanel(self.game_state)
             self.leaderboard_panel.show()
+
+    def randomize_all_ships(self):
+        self.game_state.randomize_ships("Alpha")
+        self.game_state.randomize_ships("Omega")
+        self.update_grids()
+        self.log_box.append("All ships randomized for both teams.")
+
+    def randomize_team(self, team):
+        self.game_state.randomize_ships(team)
+        self.update_grids()
+        self.log_box.append(f"All ships randomized for {team}.")
+
+    def randomize_selected_ship(self):
+        team = self.ship_team.currentText()
+        idx = self.ship_select.currentIndex()
+        # Remove the selected ship from the team first
+        ships = self.game_state.ships_alpha if team == "Alpha" else self.game_state.ships_omega
+        if idx < len(ships):
+            del ships[idx]
+        self.game_state.randomize_ships(team, [idx])
+        self.update_grids()
+        self.log_box.append(f"Randomized {self.ship_select.currentText()} for {team}.")
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
