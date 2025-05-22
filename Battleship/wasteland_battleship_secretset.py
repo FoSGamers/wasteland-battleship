@@ -208,16 +208,6 @@ class DisplayWindow(QtWidgets.QWidget):
                 rect = QtCore.QRectF(40 + x * cell_size, offset_y_alpha + y * cell_size, cell_size, cell_size)
                 painter.fillRect(rect, QtGui.QColor(display_color))
                 painter.drawRect(rect)
-        # Draw most recent log entry between grids
-        if self.game_state.shots_log:
-            player, team, coord, result = self.game_state.shots_log[-1]
-            coord_str = f"{string.ascii_uppercase[coord[0]]}{coord[1]+1}"
-            log_line = f"{player} ({team}) fired at {coord_str}: {result}"
-            font.setPointSize(18)
-            painter.setFont(font)
-            painter.setPen(QtGui.QColor("black"))
-            y_log = offset_y_alpha + GRID_SIZE * cell_size + 24
-            painter.drawText(self.rect().adjusted(0, int(y_log), 0, 0), QtCore.Qt.AlignHCenter | QtCore.Qt.AlignTop, log_line)
         # Draw Omega grid
         offset_y_omega = grid_height + 70
         font.setPointSize(14)
@@ -235,19 +225,31 @@ class DisplayWindow(QtWidgets.QWidget):
                 rect = QtCore.QRectF(40 + x * cell_size, offset_y_omega + y * cell_size, cell_size, cell_size)
                 painter.fillRect(rect, QtGui.QColor(display_color))
                 painter.drawRect(rect)
-        # Show HIT or MISS text if last shot exists
+        # Draw log line exactly between the two grids
+        if self.game_state.shots_log:
+            player, team, coord, result = self.game_state.shots_log[-1]
+            coord_str = f"{string.ascii_uppercase[coord[0]]}{coord[1]+1}"
+            log_line = f"{player} ({team}) fired at {coord_str}: {result}"
+            # Calculate the space between the bottom of Alpha and top of Omega grid
+            bottom_alpha = offset_y_alpha + cell_size * GRID_SIZE
+            top_omega = offset_y_omega - 24  # top of Omega grid's column labels
+            available_space = top_omega - bottom_alpha
+            if available_space > 10:
+                font.setPointSize(min(18, max(10, int(available_space * 0.5))))
+                painter.setFont(font)
+                painter.setPen(QtGui.QColor("black"))
+                y_log = bottom_alpha + (available_space / 2) - 10
+                painter.drawText(QtCore.QRectF(0, y_log, width, available_space), QtCore.Qt.AlignHCenter | QtCore.Qt.AlignVCenter, log_line)
+        # Show HIT or MISS text only in the center of the Omega grid
         if self.game_state.shots_log:
             _, _, _, result = self.game_state.shots_log[-1]
-            if result == "HIT":
-                painter.setPen(QtGui.QColor("red"))
+            if result == "HIT" or result == "MISS":
                 font.setPointSize(48)
                 painter.setFont(font)
-                painter.drawText(self.rect(), QtCore.Qt.AlignCenter, "HIT")
-            elif result == "MISS":
-                painter.setPen(QtGui.QColor("blue"))
-                font.setPointSize(48)
-                painter.setFont(font)
-                painter.drawText(self.rect(), QtCore.Qt.AlignCenter, "MISS")
+                painter.setPen(QtGui.QColor("red" if result == "HIT" else "blue"))
+                # Center in Omega grid
+                omega_grid_rect = QtCore.QRectF(40, offset_y_omega, cell_size * GRID_SIZE, cell_size * GRID_SIZE)
+                painter.drawText(omega_grid_rect, QtCore.Qt.AlignCenter, result)
         painter.setPen(QtGui.QColor("black"))
 
 class ShipPlacementGrid(QtWidgets.QWidget):
@@ -401,12 +403,9 @@ class ControlWindow(QtWidgets.QWidget):
         about_action = QtWidgets.QAction("About", self)
         about_action.triggered.connect(self.show_about)
         help_menu.addAction(about_action)
-        # --- Controls Area: Use QGridLayout for neatness ---
-        controls_grid = QtWidgets.QGridLayout()
-        controls_grid.setHorizontalSpacing(8)
-        controls_grid.setVerticalSpacing(8)
-        controls_grid.setContentsMargins(8, 8, 8, 8)
-        # --- Top: Shot Controls ---
+
+        # --- Shot Controls Group ---
+        shot_group = QtWidgets.QGroupBox("Shot Controls")
         shot_layout = QtWidgets.QHBoxLayout()
         self.name_input = QtWidgets.QLineEdit()
         self.name_input.setPlaceholderText("Player Name")
@@ -432,10 +431,11 @@ class ControlWindow(QtWidgets.QWidget):
         shot_layout.addWidget(self.fire_btn)
         shot_layout.addWidget(self.undo_btn)
         shot_layout.addWidget(self.reset_btn)
-        controls_grid.addLayout(shot_layout, 0, 0, 1, 6)
+        shot_group.setLayout(shot_layout)
 
-        # --- New Row: Ship Placement/Randomize Controls ---
-        ship_row_layout = QtWidgets.QHBoxLayout()
+        # --- Ship Placement Group ---
+        ship_group = QtWidgets.QGroupBox("Ship Placement")
+        ship_layout = QtWidgets.QHBoxLayout()
         self.ship_select = QtWidgets.QComboBox()
         for name, _ in SHIP_SHAPES:
             self.ship_select.addItem(name)
@@ -448,6 +448,16 @@ class ControlWindow(QtWidgets.QWidget):
         self.place_btn.clicked.connect(self.place_ship_text)
         self.ship_entry = QtWidgets.QLineEdit()
         self.ship_entry.setPlaceholderText("Set ship origin: A1")
+        ship_layout.addWidget(self.ship_select)
+        ship_layout.addWidget(self.rotate_btn)
+        ship_layout.addWidget(self.ship_team)
+        ship_layout.addWidget(self.place_btn)
+        ship_layout.addWidget(self.ship_entry)
+        ship_group.setLayout(ship_layout)
+
+        # --- Randomization Group ---
+        rand_group = QtWidgets.QGroupBox("Randomization")
+        rand_layout = QtWidgets.QHBoxLayout()
         self.randomize_all_btn = QtWidgets.QPushButton("Randomize All Ships (Both)")
         self.randomize_all_btn.clicked.connect(self.randomize_all_ships)
         self.randomize_alpha_btn = QtWidgets.QPushButton("Randomize Alpha")
@@ -456,18 +466,14 @@ class ControlWindow(QtWidgets.QWidget):
         self.randomize_omega_btn.clicked.connect(lambda: self.randomize_team("Omega"))
         self.randomize_selected_btn = QtWidgets.QPushButton("Randomize Selected Ship")
         self.randomize_selected_btn.clicked.connect(self.randomize_selected_ship)
-        ship_row_layout.addWidget(self.ship_select)
-        ship_row_layout.addWidget(self.rotate_btn)
-        ship_row_layout.addWidget(self.ship_team)
-        ship_row_layout.addWidget(self.place_btn)
-        ship_row_layout.addWidget(self.ship_entry)
-        ship_row_layout.addWidget(self.randomize_all_btn)
-        ship_row_layout.addWidget(self.randomize_alpha_btn)
-        ship_row_layout.addWidget(self.randomize_omega_btn)
-        ship_row_layout.addWidget(self.randomize_selected_btn)
-        controls_grid.addLayout(ship_row_layout, 1, 0, 1, 6)
+        rand_layout.addWidget(self.randomize_all_btn)
+        rand_layout.addWidget(self.randomize_alpha_btn)
+        rand_layout.addWidget(self.randomize_omega_btn)
+        rand_layout.addWidget(self.randomize_selected_btn)
+        rand_group.setLayout(rand_layout)
 
-        # --- Game/Stats Controls ---
+        # --- Game/Stats Group ---
+        game_group = QtWidgets.QGroupBox("Game / Stats")
         game_layout = QtWidgets.QHBoxLayout()
         self.save_log_btn = QtWidgets.QPushButton("Save Log")
         self.save_log_btn.clicked.connect(self.save_log)
@@ -490,51 +496,45 @@ class ControlWindow(QtWidgets.QWidget):
         game_layout.addWidget(self.win_label)
         game_layout.addWidget(self.stats_btn)
         game_layout.addWidget(self.leaderboard_btn)
-        controls_grid.addLayout(game_layout, 2, 0, 1, 6)
+        game_group.setLayout(game_layout)
 
         # --- GM vs Players Toggle ---
         self.gm_vs_players_btn = QtWidgets.QPushButton("GM vs Players Mode: OFF")
         self.gm_vs_players_btn.setCheckable(True)
         self.gm_vs_players_btn.setToolTip("Toggle GM vs Players mode. When ON, ships are hidden from GM.")
         self.gm_vs_players_btn.toggled.connect(self.toggle_gm_vs_players_mode)
-        controls_grid.addWidget(self.gm_vs_players_btn, 3, 0, 1, 6)
+        gm_toggle_layout = QtWidgets.QHBoxLayout()
+        gm_toggle_layout.addStretch(1)
+        gm_toggle_layout.addWidget(self.gm_vs_players_btn)
+        gm_toggle_layout.addStretch(1)
+        gm_toggle_widget = QtWidgets.QWidget()
+        gm_toggle_widget.setLayout(gm_toggle_layout)
 
-        # --- Log ---
+        # --- Log Box ---
         self.log_box = QtWidgets.QTextEdit()
         self.log_box.setReadOnly(True)
         self.log_box.setMinimumHeight(100)
         self.log_box.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
-        log_scroll = QtWidgets.QScrollArea()
-        log_scroll.setWidgetResizable(True)
-        log_scroll.setWidget(self.log_box)
-        log_scroll.setMinimumHeight(100)
-        log_scroll.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
-        controls_grid.addWidget(log_scroll, 4, 0, 1, 6)
 
-        # --- Left Controls Widget (top: controls, bottom: log, with splitter) ---
-        controls_widget = QtWidgets.QWidget()
-        controls_widget.setLayout(controls_grid)
-        controls_widget.setMinimumHeight(220)
-        controls_widget.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.MinimumExpanding)
-        # --- Left Controls/Log Splitter ---
-        left_splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical)
-        left_splitter.addWidget(controls_widget)
-        left_splitter.addWidget(log_scroll)
-        left_splitter.setSizes([260, 100])
-        left_splitter.setHandleWidth(6)
-        left_panel = QtWidgets.QWidget()
+        # --- Left Panel Layout ---
         left_panel_layout = QtWidgets.QVBoxLayout()
-        left_panel_layout.setContentsMargins(0, 0, 0, 0)
+        left_panel_layout.setContentsMargins(8, 8, 8, 8)
+        left_panel_layout.setSpacing(12)
         left_panel_layout.addWidget(menu_bar)
-        left_panel_layout.addWidget(left_splitter)
+        left_panel_layout.addWidget(shot_group)
+        left_panel_layout.addWidget(ship_group)
+        left_panel_layout.addWidget(rand_group)
+        left_panel_layout.addWidget(game_group)
+        left_panel_layout.addWidget(gm_toggle_widget)
+        left_panel_layout.addWidget(self.log_box, stretch=1)
         left_panel_layout.addWidget(self.status_bar)
+        left_panel = QtWidgets.QWidget()
         left_panel.setLayout(left_panel_layout)
-        left_panel.setMinimumWidth(320)
+        left_panel.setMinimumWidth(340)
 
         # --- Right Layout: ship grids stacked vertically ---
         self.alpha_label = QtWidgets.QLabel("Alpha Ship Grid")
         self.omega_label = QtWidgets.QLabel("Omega Ship Grid")
-        # Set up grids with hide_ships logic and minimum size
         self.alpha_grid = ShipPlacementGrid(self.game_state, "Alpha", self.update_grids, self.get_selected_ship, self.get_orientation, self, hide_ships=False)
         self.omega_grid = ShipPlacementGrid(self.game_state, "Omega", self.update_grids, self.get_selected_ship, self.get_orientation, self, hide_ships=False)
         self.alpha_grid.setMinimumSize(300, 300)
@@ -548,15 +548,14 @@ class ControlWindow(QtWidgets.QWidget):
         right_layout.setStretchFactor(self.omega_grid, 1)
         right_panel = QtWidgets.QWidget()
         right_panel.setLayout(right_layout)
-        right_panel.setMinimumWidth(340)  # 300 grid + padding/labels
+        right_panel.setMinimumWidth(340)
 
         # --- Main Layout: QSplitter for left/right ---
         splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
         splitter.addWidget(left_panel)
         splitter.addWidget(right_panel)
-        splitter.setSizes([max(320, int(self.width() * 0.28)), max(700, int(self.width() * 0.7))])
+        splitter.setSizes([max(340, int(self.width() * 0.32)), max(700, int(self.width() * 0.7))])
         splitter.setHandleWidth(10)
-        # Prevent right panel from collapsing
         splitter.setCollapsible(0, False)
         splitter.setCollapsible(1, False)
         main_layout = QtWidgets.QVBoxLayout(self)
