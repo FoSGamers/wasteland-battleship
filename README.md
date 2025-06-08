@@ -1,4 +1,4 @@
-# Battleship (Cursor Edition)
+# Battleship
 
 ## Overview
 A modern, streamer-friendly Battleship game with a robust PyQt5 UI, GM control panel, and full test automation. Built for live streaming, fair play, and professional usability.
